@@ -76,19 +76,70 @@ class LapHistorical:
                 latest[driver_number] = row
         return list(latest.values())
 
+    def _is_duration(self, value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+    def _elapsed_seconds(self, row: dict, tick: datetime) -> float | None:
+        date_start = row.get("date_start")
+        if not isinstance(date_start, str):
+            return None
+        return (tick - datetime.fromisoformat(date_start)).total_seconds()
+
+    def _clear_sector(self, row: dict, sector: int) -> None:
+        row[f"duration_sector_{sector}"] = None
+        row[f"segments_sector_{sector}"] = None
+
+    def _mask_unfinished_sectors(self, row: dict, elapsed: float) -> bool:
+        cumulative = 0.0
+        sector_pending = False
+        chain_broken = False
+        for sector in (1, 2, 3):
+            duration = row.get(f"duration_sector_{sector}")
+            if sector_pending:
+                self._clear_sector(row, sector)
+                continue
+            if chain_broken or not self._is_duration(duration):
+                chain_broken = True
+                continue
+            cumulative += duration
+            if elapsed < cumulative:
+                self._clear_sector(row, sector)
+                sector_pending = True
+        return sector_pending
+
+    def _mask_unfinished_lap(self, row: dict, elapsed: float, sector_pending: bool) -> None:
+        lap_duration = row.get("lap_duration")
+        if sector_pending or (self._is_duration(lap_duration) and elapsed < lap_duration):
+            row["lap_duration"] = None
+
+    def _mask_unfinished_timings(self, row: dict, tick: datetime) -> dict:
+        masked = dict(row)
+        elapsed = self._elapsed_seconds(masked, tick)
+        if elapsed is None:
+            return masked
+        sector_pending = self._mask_unfinished_sectors(masked, elapsed)
+        self._mask_unfinished_lap(masked, elapsed, sector_pending)
+        return masked
+
     def call_api(self, date: str) -> Any | None:
-        """Call the interval API based on given session key and date"""
+        """Return each driver's latest lap as of `date`.
+
+        Sector duration, sector segments, and lap duration stay None until
+        `date` reaches the time that split would have been printed live.
+        """
         try:
             url = self._parse_url(date)
             response = urlopen(url).read().decode("utf-8")
             data = json.loads(response)
-            return self._get_latest_data_for_each_driver(data)
+            latest = self._get_latest_data_for_each_driver(data)
+            tick = datetime.fromisoformat(date)
+            return [self._mask_unfinished_timings(row, tick) for row in latest]
         except URLError, TimeoutError, json.JSONDecodeError, UnicodeError:
             return None
 
 
 if __name__ == "__main__":
-    lap_date = "2026-03-29T06:50:00.000000+00:00"
+    lap_date = "2026-03-29T06:10:00.000000+00:00"
     lap = LapHistorical(11253)
     data = lap.call_api(lap_date)
-    print(len(data))
+    print(data)
