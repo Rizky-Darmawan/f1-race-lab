@@ -18,10 +18,10 @@ class LiveSimulation:
         return dt.isoformat(timespec="microseconds")
 
     def _publish_historical(self, lower: datetime, upper: datetime) -> None:
-        lower = self._format_iso8601(lower)
-        upper = self._format_iso8601(upper)
-        intervals = IntervalHistorical(self._session_key, upper, lower)
-        intervals = intervals.call_api()
+        lower_datetime = self._format_iso8601(lower)
+        upper_datetime = self._format_iso8601(upper)
+        intervals = IntervalHistorical(self._session_key)
+        intervals = intervals.call_api(lower_datetime, upper_datetime)
         if intervals:
             print(intervals, flush=True)
             print("=" * 70)

@@ -13,22 +13,20 @@ class IntervalHistorical:
     _BASE_URL = "https://api.openf1.org/v1/intervals"
     _URL_FILTER = "?session_key={session_key}&date>{lower_date}&date<={upper_date}"
 
-    def __init__(self, session_key: int, lower_date: str, upper_date: str) -> None:
+    def __init__(self, session_key: int) -> None:
         self._session_key = session_key
-        self._lower_date = lower_date
-        self._upper_date = upper_date
 
-    def _parse_url(self) -> str:
+    def _parse_url(self, lower_date: str, upper_date: str) -> str:
         base = self._BASE_URL
         url_filter = self._URL_FILTER.format(
-            session_key=self._session_key, lower_date=self._lower_date, upper_date=self._upper_date
+            session_key=self._session_key, lower_date=lower_date, upper_date=upper_date
         )
         return base + url_filter
 
-    def call_api(self) -> Any | None:
+    def call_api(self, lower_date: str, upper_date: str) -> Any | None:
         """Call the interval API based on given session key and date"""
         try:
-            url = self._parse_url()
+            url = self._parse_url(lower_date, upper_date)
             response = urlopen(url).read().decode("utf-8")
             return json.loads(response)
         except URLError, TimeoutError, json.JSONDecodeError, UnicodeError:
