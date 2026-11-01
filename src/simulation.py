@@ -38,13 +38,11 @@ class LiveSimulation:
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         wall_origin = time.perf_counter()
         tick = 0
-        previous_time = origin
         try:
             while True:
                 tick += 1
                 current_time = origin + (self._TICK * tick)
                 self._publish_historical_lap(current_time)
-                previous_time = current_time
                 remaining = wall_origin + (tick * self._TICK.total_seconds()) - time.perf_counter()
                 if remaining > 0:
                     time.sleep(remaining)

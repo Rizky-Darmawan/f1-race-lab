@@ -63,7 +63,7 @@ class LapHistorical:
         )
         return self._BASE_URL + url_filter
 
-    def _get_latest_data_for_each_driver(self, data: list[dict]) -> list[dict]:
+    def get_latest_data_for_each_driver(self, data: list[dict]) -> list[dict]:
         latest = {}
         for row in data:
             driver_number = row.get("driver_number")
@@ -112,7 +112,7 @@ class LapHistorical:
         if sector_pending or (self._is_duration(lap_duration) and elapsed < lap_duration):
             row["lap_duration"] = None
 
-    def _mask_unfinished_timings(self, row: dict, tick: datetime) -> dict:
+    def mask_unfinished_timings(self, row: dict, tick: datetime) -> dict:
         masked = dict(row)
         elapsed = self._elapsed_seconds(masked, tick)
         if elapsed is None:
@@ -131,9 +131,9 @@ class LapHistorical:
             url = self._parse_url(date)
             response = urlopen(url).read().decode("utf-8")
             data = json.loads(response)
-            latest = self._get_latest_data_for_each_driver(data)
+            latest = self.get_latest_data_for_each_driver(data)
             tick = datetime.fromisoformat(date)
-            return [self._mask_unfinished_timings(row, tick) for row in latest]
+            return [self.mask_unfinished_timings(row, tick) for row in latest]
         except URLError, TimeoutError, json.JSONDecodeError, UnicodeError:
             return None
 
