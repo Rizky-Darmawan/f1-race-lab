@@ -1,10 +1,81 @@
 """Microsecond clock simulation with a parameterized ISO 8601 start time."""
 
+import asyncio
+import json
+import threading
 import time
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 
+from amqtt.client import MQTTClient
+
+from mqtt_server import HOST, PORT
 from src.historical.interval import Interval
 from src.historical.lap import Lap
+
+INTERVAL_TOPIC = "interval"
+_BROKER_URI = f"mqtt://{HOST}:{PORT}"
+
+
+class _MqttClient:
+    """Publish to the local broker from the synchronous race clock."""
+
+    def __init__(self) -> None:
+        self._client: MQTTClient | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._thread: threading.Thread | None = None
+
+    def _run_loop(self, loop: asyncio.AbstractEventLoop, started: threading.Event) -> None:
+        asyncio.set_event_loop(loop)
+        loop.call_soon(started.set)
+        loop.run_forever()
+
+    async def _open(self) -> MQTTClient:
+        client = MQTTClient("f1-race-lab")
+        await client.connect(_BROKER_URI)
+        return client
+
+    def connect(self) -> None:
+        loop = asyncio.new_event_loop()
+        started = threading.Event()
+        thread = threading.Thread(
+            target=self._run_loop,
+            args=(loop, started),
+            name="mqtt-client",
+            daemon=True,
+        )
+        thread.start()
+        started.wait()
+        self._loop = loop
+        self._thread = thread
+        try:
+            self._client = asyncio.run_coroutine_threadsafe(self._open(), loop).result()
+        except Exception:
+            self.disconnect()
+            raise
+
+    def disconnect(self) -> None:
+        client = self._client
+        loop = self._loop
+        thread = self._thread
+        self._client = None
+        self._loop = None
+        self._thread = None
+        if client is not None and loop is not None and loop.is_running():
+            asyncio.run_coroutine_threadsafe(client.disconnect(), loop).result()
+        if loop is not None and loop.is_running():
+            loop.call_soon_threadsafe(loop.stop)
+        if thread is not None:
+            thread.join(timeout=2)
+
+    def publish(self, topic: str, payload: bytes) -> None:
+        if self._client is None or self._loop is None:
+            return
+        result = asyncio.run_coroutine_threadsafe(
+            self._client.publish(topic, payload),
+            self._loop,
+        )
+        result.result()
 
 
 class LiveSimulation:
@@ -15,15 +86,16 @@ class LiveSimulation:
     def __init__(self, intervals: list[Interval], laps: list[Lap]) -> None:
         self._intervals = intervals
         self._laps = laps
+        self._mqtt = _MqttClient()
 
     def _format_iso8601(self, dt: datetime) -> str:
         return dt.isoformat(timespec="microseconds")
 
     def _publish_intervals(self, iso_date: str, interval_lookup: dict[str, Interval]) -> None:
         result = interval_lookup.get(iso_date)
-        if result:
-            print(result)
-            print("=" * 150)
+        if result is None:
+            return
+        self._mqtt.publish(INTERVAL_TOPIC, json.dumps(asdict(result)).encode())
 
     def _publish_laps(self, iso_date: str, lap_lookup: dict[str, Lap]) -> None:
         result = lap_lookup.get(iso_date)
@@ -40,6 +112,7 @@ class LiveSimulation:
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         wall_origin = time.perf_counter()
         tick = 0
+        self._mqtt.connect()
         try:
             while True:
                 tick += 1
@@ -52,3 +125,5 @@ class LiveSimulation:
                     time.sleep(remaining)
         except KeyboardInterrupt:
             return
+        finally:
+            self._mqtt.disconnect()
