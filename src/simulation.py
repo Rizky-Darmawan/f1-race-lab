@@ -14,6 +14,7 @@ from src.historical.interval import Interval
 from src.historical.lap import Lap
 
 INTERVAL_TOPIC = "interval"
+LAP_TOPIC = "lap"
 _BROKER_URI = f"mqtt://{HOST}:{PORT}"
 
 
@@ -97,11 +98,12 @@ class LiveSimulation:
             return
         self._mqtt.publish(INTERVAL_TOPIC, json.dumps(asdict(result)).encode())
 
-    def _publish_laps(self, iso_date: str, lap_lookup: dict[str, Lap]) -> None:
-        result = lap_lookup.get(iso_date)
-        if result:
-            print(result)
-            print("=" * 150)
+    def _publish_laps(self, iso_date: str, lap_lookup: dict[str, list[Lap]]) -> None:
+        laps = lap_lookup.get(iso_date)
+        if laps is None:
+            return
+        for lap in laps:
+            self._mqtt.publish(LAP_TOPIC, json.dumps(asdict(lap)).encode())
 
     def run_clock(self, start: datetime) -> None:
         """Replay historical interval data every microsecond, starting at `start`."""
