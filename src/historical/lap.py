@@ -109,7 +109,7 @@ class _LapExploder:
 class LapData:
     """Wrapper for the OpenF1 laps endpoint."""
 
-    _BASE_URL = "https://api.openf1.org/v1/laps?session_key={session_key}&driver_number=1"
+    _BASE_URL = "https://api.openf1.org/v1/laps?session_key={session_key}"
 
     def __init__(self, session_key: int) -> None:
         self._session_key = session_key
