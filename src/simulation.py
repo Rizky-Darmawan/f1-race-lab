@@ -4,17 +4,20 @@ import asyncio
 import json
 import threading
 import time
-from dataclasses import asdict
+from dataclasses import dataclass, asdict
 from datetime import UTC, datetime, timedelta
 
 from amqtt.client import MQTTClient
+from dacite import data
 
 from mqtt_server import HOST, PORT
 from src.historical.interval import Interval
 from src.historical.lap import Lap
+from src.historical.position import Position
 
 INTERVAL_TOPIC = "interval"
 LAP_TOPIC = "lap"
+POSITION_TOPIC = "position"
 _BROKER_URI = f"mqtt://{HOST}:{PORT}"
 
 
@@ -79,14 +82,22 @@ class _MqttClient:
         result.result()
 
 
+@dataclass(frozen=True)
+class HistoricalPayload:
+    intervals: list[Interval]
+    laps: list[Lap]
+    positions: list[Position]
+
+
 class LiveSimulation:
     """Simulate a race by publishing race messages every microsecond."""
 
     _TICK = timedelta(microseconds=1)
 
-    def __init__(self, intervals: list[Interval], laps: list[Lap]) -> None:
-        self._intervals = intervals
-        self._laps = laps
+    def __init__(self, payload: HistoricalPayload) -> None:
+        self._intervals = payload.intervals
+        self._laps = payload.laps
+        self._positions = payload.positions
         self._mqtt = _MqttClient()
 
     def _format_iso8601(self, dt: datetime) -> str:
@@ -105,12 +116,22 @@ class LiveSimulation:
         for lap in laps:
             self._mqtt.publish(LAP_TOPIC, json.dumps(asdict(lap)).encode())
 
+    def _publish_position(self, iso_date: str, position_lookup: dict[str, list[Position]]) -> None:
+        positions = position_lookup.get(iso_date)
+        if positions is None:
+            return
+        for position in positions:
+            self._mqtt.publish(POSITION_TOPIC, json.dumps(asdict(position)).encode())
+
     def run_clock(self, start: datetime) -> None:
         """Replay historical interval data every microsecond, starting at `start`."""
         interval_lookup = {i.date: i for i in self._intervals}
         lap_lookup: dict[str, list[Lap]] = {}
         for lap in self._laps:
             lap_lookup.setdefault(lap.date_start, []).append(lap)
+        position_lookup: dict[str, list[Position]] = {}
+        for position in self._positions:
+            position_lookup.setdefault(position.date, []).append(position)
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         wall_origin = time.perf_counter()
         tick = 0
@@ -122,6 +143,7 @@ class LiveSimulation:
                 current_time_iso = self._format_iso8601(current_time)
                 self._publish_intervals(current_time_iso, interval_lookup)
                 self._publish_laps(current_time_iso, lap_lookup)
+                self._publish_position(current_time_iso, position_lookup)
                 remaining = wall_origin + (tick * self._TICK.total_seconds()) - time.perf_counter()
                 if remaining > 0:
                     time.sleep(remaining)
