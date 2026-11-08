@@ -8,7 +8,6 @@ from dataclasses import dataclass, asdict
 from datetime import UTC, datetime, timedelta
 
 from amqtt.client import MQTTClient
-from dacite import data
 
 from mqtt_server import HOST, PORT
 from src.historical.interval import Interval
@@ -89,6 +88,13 @@ class HistoricalPayload:
     positions: list[Position]
 
 
+@dataclass(frozen=True)
+class Lookup:
+    intervals: dict[str, list[Interval]]
+    laps: dict[str, list[Lap]]
+    positions: dict[str, list[Position]]
+
+
 class LiveSimulation:
     """Simulate a race by publishing race messages every microsecond."""
 
@@ -100,14 +106,19 @@ class LiveSimulation:
         self._positions = payload.positions
         self._mqtt = _MqttClient()
 
+    def _print(self, tick: int) -> None:
+        if tick == 1:
+            print("Publisher started..")
+
     def _format_iso8601(self, dt: datetime) -> str:
         return dt.isoformat(timespec="microseconds")
 
-    def _publish_intervals(self, iso_date: str, interval_lookup: dict[str, Interval]) -> None:
-        result = interval_lookup.get(iso_date)
-        if result is None:
+    def _publish_intervals(self, iso_date: str, interval_lookup: dict[str, list[Interval]]) -> None:
+        intervals = interval_lookup.get(iso_date)
+        if intervals is None:
             return
-        self._mqtt.publish(INTERVAL_TOPIC, json.dumps(asdict(result)).encode())
+        for interval in intervals:
+            self._mqtt.publish(INTERVAL_TOPIC, json.dumps(asdict(interval)).encode())
 
     def _publish_laps(self, iso_date: str, lap_lookup: dict[str, list[Lap]]) -> None:
         laps = lap_lookup.get(iso_date)
@@ -123,15 +134,26 @@ class LiveSimulation:
         for position in positions:
             self._mqtt.publish(POSITION_TOPIC, json.dumps(asdict(position)).encode())
 
-    def run_clock(self, start: datetime) -> None:
-        """Replay historical interval data every microsecond, starting at `start`."""
-        interval_lookup = {i.date: i for i in self._intervals}
+    def _create_lookup(self) -> Lookup:
+        interval_lookup: dict[str, list[Interval]] = {}
+        for interval in self._intervals:
+            interval_lookup.setdefault(interval.date, []).append(interval)
         lap_lookup: dict[str, list[Lap]] = {}
         for lap in self._laps:
             lap_lookup.setdefault(lap.date_start, []).append(lap)
         position_lookup: dict[str, list[Position]] = {}
         for position in self._positions:
             position_lookup.setdefault(position.date, []).append(position)
+        return Lookup(interval_lookup, lap_lookup, position_lookup)
+
+    def _publish_all(self, iso_date: str, lookup: Lookup) -> None:
+        self._publish_intervals(iso_date, lookup.intervals)
+        self._publish_laps(iso_date, lookup.laps)
+        self._publish_position(iso_date, lookup.positions)
+
+    def run_clock(self, start: datetime) -> None:
+        """Replay historical interval data every microsecond, starting at `start`."""
+        lookup_data = self._create_lookup()
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         wall_origin = time.perf_counter()
         tick = 0
@@ -141,9 +163,8 @@ class LiveSimulation:
                 tick += 1
                 current_time = origin + (self._TICK * tick)
                 current_time_iso = self._format_iso8601(current_time)
-                self._publish_intervals(current_time_iso, interval_lookup)
-                self._publish_laps(current_time_iso, lap_lookup)
-                self._publish_position(current_time_iso, position_lookup)
+                self._publish_all(current_time_iso, lookup_data)
+                self._print(tick)
                 remaining = wall_origin + (tick * self._TICK.total_seconds()) - time.perf_counter()
                 if remaining > 0:
                     time.sleep(remaining)
