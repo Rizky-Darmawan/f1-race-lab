@@ -1,7 +1,7 @@
 """Load OpenF1 starting grid for one session as reference data."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from urllib.request import urlopen
 
@@ -23,15 +23,25 @@ class StartingGridData:
     """Wrapper for the OpenF1 intervals endpoint."""
 
     _BASE_URL = "https://api.openf1.org/v1/starting_grid?session_key={session_key}"
+    _SESSIONS_URL = "https://api.openf1.org/v1/sessions"
 
     def __init__(self, session_key: int, position_data: list[Position]) -> None:
         self._session_key = session_key
         self._position_data = position_data
-        self._url = self._BASE_URL.format(session_key=session_key)
+
+    def _get_quali_session_key(self) -> int:
+        """Return the qualifying session that sets the grid for this meeting."""
+        session_url = f"{self._SESSIONS_URL}?session_key={self._session_key}"
+        response = urlopen(session_url).read().decode("utf-8")
+        meeting_key = json.loads(response)[0]["meeting_key"]
+        quali_url = f"{self._SESSIONS_URL}?meeting_key={meeting_key}&session_name=Qualifying"
+        response = urlopen(quali_url).read().decode("utf-8")
+        return json.loads(response)[0]["session_key"]
 
     def _get_initial_starting_grid(self) -> list[StartingGrid]:
         """Fetch the session intervals and return them in API order."""
-        response = urlopen(self._url).read().decode("utf-8")
+        url = self._BASE_URL.format(session_key=self._get_quali_session_key())
+        response = urlopen(url).read().decode("utf-8")
         datas = json.loads(response)
         results = []
         for data in datas:
@@ -59,3 +69,18 @@ class StartingGridData:
             latest.values(), key=lambda item: (item[1].position, item[1].driver_number)
         )
         return [row for _, row in ordered]
+
+    def create_latest_grid_position(self, date: str) -> list[StartingGrid]:
+        """Get the latest grid position based on given timestamp."""
+        latest_by_driver = {
+            row.driver_number: row.position for row in self._get_latest_position_by_driver(date)
+        }
+        updated: list[StartingGrid] = []
+        for grid_row in self._get_initial_starting_grid():
+            position = latest_by_driver.get(grid_row.driver_number)
+            if position is None:
+                updated.append(grid_row)
+                continue
+            updated.append(replace(grid_row, position=position))
+        updated.sort(key=lambda row: (row.position, row.driver_number))
+        return updated
