@@ -55,5 +55,7 @@ class StartingGridData:
             current = latest.get(row.driver_number)
             if current is None or row_date >= current[0]:
                 latest[row.driver_number] = (row_date, row)
-        ordered = sorted(latest.values(), key=lambda item: (item[1].position, item[1].driver_number))
+        ordered = sorted(
+            latest.values(), key=lambda item: (item[1].position, item[1].driver_number)
+        )
         return [row for _, row in ordered]

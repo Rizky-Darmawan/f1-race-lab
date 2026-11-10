@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from src.historical.interval import IntervalData
 from src.historical.lap import LapData
 from src.historical.position import PositionData
-from src.simulation.live_simulation import LiveSimulation, HistoricalPayload
+from src.simulation.live_simulation import HistoricalPayload, LiveSimulation
 
 if __name__ == "__main__":
     interval = IntervalData(11253).construct_intervals_from_api()
