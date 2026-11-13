@@ -139,3 +139,12 @@ def test_missing_interval_does_not_clear_the_current_gap() -> None:
     }
     subscriber._update_live_grid("interval", json.dumps(payload).encode())
     assert grid[1].interval == 0.4
+
+
+def test_format_live_grid_shows_the_leaders_lap_and_gaps_behind() -> None:
+    """Read like the timing tower: one lap from position 1, gaps for the rest."""
+    grid = _grid()
+    grid[1].lap = 9
+    grid[1].interval = 0.8
+    text = _subscriber(grid)._format_live_grid(grid)
+    assert text == ("LAP 3\n 1  Lewis Hamilton\n 2  Max Verstappen  +0.800")

@@ -49,6 +49,26 @@ class Subscriber:
             if row is not None:
                 row.position = position.position
 
+    def _format_live_grid(self, live_grid: dict[int, LiveGrid]) -> str:
+        """Turn the raw grid into a timing tower in current race order.
+
+        The lap is the one held by the driver in position 1. Every other row
+        shows its gap to the car ahead.
+        """
+        ordered = sorted(live_grid.values(), key=lambda row: (row.position, row.driver_number))
+        if not ordered:
+            return ""
+        leader = next((row for row in ordered if row.position == 1), ordered[0])
+        name_width = max(len(row.driver_name) for row in ordered)
+        lines = [f"LAP {leader.lap}"]
+        for row in ordered:
+            name = f"{row.driver_name:<{name_width}}"
+            if row is leader:
+                lines.append(f"{row.position:>2}  {name}".rstrip())
+            else:
+                lines.append(f"{row.position:>2}  {name}  {row.interval:+.3f}")
+        return "\n".join(lines)
+
     async def _listen(self) -> None:
         client = MQTTClient(_CLIENT_ID)
         await client.connect(self._uri)
@@ -68,7 +88,7 @@ class Subscriber:
                 ):
                     continue
                 self._update_live_grid(header.topic_name, payload.data)
-                print(self._live_grid)
+                print(self._format_live_grid(self._live_grid))
         finally:
             await client.disconnect()
 
