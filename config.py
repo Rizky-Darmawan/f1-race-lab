@@ -3,4 +3,4 @@
 from datetime import UTC, datetime
 
 SESSION_KEY = 11253
-START = datetime(2026, 3, 29, 5, 14, 0, tzinfo=UTC)
+START = datetime(2026, 3, 29, 6, 0, 0, tzinfo=UTC)

@@ -1,4 +1,4 @@
-"""Replay historical race messages in real time from a given start."""
+"""Replay historical race messages from a given start at a chosen speed."""
 
 import time
 from dataclasses import dataclass
@@ -56,16 +56,23 @@ class LiveSimulation:
         self._lap_publisher.publish(iso_date)
         self._position_publisher.publish(iso_date)
 
-    def run_clock(self, start: datetime) -> None:
-        """Replay messages after `start`, keeping race time on the wall clock."""
+    def run_clock(self, start: datetime, speed: float = 1) -> None:
+        """Replay messages after `start` at `speed` times race time.
+
+        A speed of 1 keeps the wall clock in step with the race. A speed of 2
+        publishes twice as fast.
+        """
+        if speed <= 0:
+            raise ValueError("speed must be greater than 0")
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         schedule = self._schedule(origin)
         wall_origin = time.perf_counter()
         self._mqtt.connect()
-        print("Publisher started..")
+        print(f"Publisher started at {speed:g}x..")
         try:
             for when, stamp in schedule:
-                remaining = (when - origin).total_seconds() - (time.perf_counter() - wall_origin)
+                race_elapsed = (when - origin).total_seconds() / speed
+                remaining = race_elapsed - (time.perf_counter() - wall_origin)
                 if remaining > 0:
                     time.sleep(remaining)
                 self._publish_all(stamp)
