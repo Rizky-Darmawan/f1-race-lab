@@ -31,36 +31,43 @@ class Subscriber:
         self._topics = topics
         self._live_grid = live_grid
 
-    def _update_live_grid(self, topic: str, raw: bytes | bytearray) -> None:
-        """Write the field this topic owns onto the driver named in the payload."""
+    def _update_live_grid(self, topic: str, raw: bytes | bytearray) -> str:
+        """Write the field this topic owns onto the driver named in the payload.
+
+        Returns the timestamp carried by the message.
+        """
         if topic == _INTERVAL_TOPIC:
             interval = Interval(**json.loads(raw))
             row = self._live_grid.get(interval.driver_number)
             if row is not None and isinstance(interval.interval, (int, float)):
                 row.interval = float(interval.interval)
-        elif topic == _LAP_TOPIC:
+            return interval.date
+        if topic == _LAP_TOPIC:
             lap = Lap(**json.loads(raw))
             row = self._live_grid.get(lap.driver_number)
             if row is not None:
                 row.lap = lap.lap_number
-        elif topic == _POSITION_TOPIC:
+            return lap.date_start
+        if topic == _POSITION_TOPIC:
             position = Position(**json.loads(raw))
             row = self._live_grid.get(position.driver_number)
             if row is not None:
                 row.position = position.position
+            return position.date
+        return ""
 
-    def _format_live_grid(self, live_grid: dict[int, LiveGrid]) -> str:
+    def _format_live_grid(self, live_grid: dict[int, LiveGrid], at: str) -> str:
         """Turn the raw grid into a timing tower in current race order.
 
         The lap is the one held by the driver in position 1. Every other row
-        shows its gap to the car ahead.
+        shows its gap to the car ahead. `at` is the message timestamp.
         """
         ordered = sorted(live_grid.values(), key=lambda row: (row.position, row.driver_number))
         if not ordered:
-            return ""
+            return at
         leader = next((row for row in ordered if row.position == 1), ordered[0])
         name_width = max(len(row.driver_name) for row in ordered)
-        lines = [f"LAP {leader.lap}"]
+        lines = [f"{at}  LAP {leader.lap}"]
         for row in ordered:
             name = f"{row.driver_name:<{name_width}}"
             if row is leader:
@@ -87,8 +94,8 @@ class Subscriber:
                     or payload.data is None
                 ):
                     continue
-                self._update_live_grid(header.topic_name, payload.data)
-                print(self._format_live_grid(self._live_grid))
+                at = self._update_live_grid(header.topic_name, payload.data)
+                print(self._format_live_grid(self._live_grid, at))
         finally:
             await client.disconnect()
 

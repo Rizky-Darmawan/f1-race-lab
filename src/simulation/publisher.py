@@ -1,4 +1,4 @@
-"""Publish one historical feed for the current simulation microsecond."""
+"""Publish one historical feed for a replay timestamp."""
 
 import json
 from dataclasses import asdict
