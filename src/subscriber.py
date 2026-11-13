@@ -7,7 +7,7 @@ from amqtt.client import MQTTClient
 from amqtt.mqtt.constants import QOS_0
 
 from src.historical.position import PositionData
-from src.historical.starting_grid import StartingGrid, StartingGridData
+from src.reference.starting_grid import StartingGrid, StartingGridData
 
 _CLIENT_ID = "f1-race-lab-subscriber"
 

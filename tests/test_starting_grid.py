@@ -1,7 +1,7 @@
 """Tests for the latest position held by each driver at a given time."""
 
 from src.historical.position import Position
-from src.historical.starting_grid import StartingGrid, StartingGridData
+from src.reference.starting_grid import StartingGrid, StartingGridData
 
 
 def _position(date: str, driver_number: int, position: int) -> Position:

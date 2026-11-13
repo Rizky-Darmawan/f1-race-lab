@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from src.historical.position import Position, PositionData
-from src.historical.starting_grid import StartingGrid, StartingGridData
+from src.reference.starting_grid import StartingGrid, StartingGridData
 from src.subscriber import Subscriber
 
 

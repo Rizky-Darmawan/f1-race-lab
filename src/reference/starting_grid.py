@@ -20,7 +20,7 @@ class StartingGrid:
 
 
 class StartingGridData:
-    """Wrapper for the OpenF1 intervals endpoint."""
+    """Wrapper for the OpenF1 starting grid endpoint."""
 
     _BASE_URL = "https://api.openf1.org/v1/starting_grid?session_key={session_key}"
     _SESSIONS_URL = "https://api.openf1.org/v1/sessions"
