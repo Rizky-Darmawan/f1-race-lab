@@ -11,7 +11,7 @@ from src.subscriber import Subscriber
 
 
 def create_app(subscriber: Subscriber) -> FastAPI:
-    """Stream one shared MQTT listener to every client on `/live`."""
+    """Stream one shared MQTT listener to every client on `/timing`."""
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -27,8 +27,8 @@ def create_app(subscriber: Subscriber) -> FastAPI:
 
     app = FastAPI(lifespan=lifespan)
 
-    @app.get("/live", response_class=EventSourceResponse)
-    async def live() -> AsyncIterator[dict[str, object]]:
+    @app.get("/timing", response_class=EventSourceResponse)
+    async def timing() -> AsyncIterator[dict[str, object]]:
         async for payload in subscriber.events():
             yield payload
 
