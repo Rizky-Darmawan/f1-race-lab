@@ -1,5 +1,6 @@
 """Tests for applying live topics onto the driver grid."""
 
+import asyncio
 import json
 from dataclasses import asdict
 
@@ -146,7 +147,78 @@ def test_format_live_grid_shows_the_leaders_lap_and_gaps_behind() -> None:
     grid = _grid()
     grid[1].lap = 9
     grid[1].interval = 0.8
-    text = _subscriber(grid)._format_live_grid(grid, "2026-03-29T05:14:04+00:00")
-    assert text == (
-        "2026-03-29T05:14:04+00:00  LAP 3\n 1  Lewis Hamilton\n 2  Max Verstappen  +0.800"
-    )
+    tower = _subscriber(grid)._format_live_grid(grid, "2026-03-29T05:14:04+00:00")
+    assert tower == {
+        "at": "2026-03-29T05:14:04+00:00",
+        "lap": 3,
+        "rows": [
+            {
+                "position": 1,
+                "driver_number": 44,
+                "driver_name": "Lewis Hamilton",
+                "interval": None,
+            },
+            {
+                "position": 2,
+                "driver_number": 1,
+                "driver_name": "Max Verstappen",
+                "interval": 0.8,
+            },
+        ],
+    }
+
+
+async def _read_snapshot_then_later_publish(
+    grid: dict[int, LiveGrid],
+    subscriber: Subscriber,
+) -> None:
+    subscriber.publish_snapshot("2026-03-29T06:00:00+00:00")
+    stream = subscriber.events()
+    first = await anext(stream)
+    grid[1].interval = 1.5
+    subscriber._publish("2026-03-29T06:12:04+00:00")
+    second = await anext(stream)
+    await stream.aclose()
+    assert subscriber._clients == []
+    assert first == {
+        "at": "2026-03-29T06:00:00+00:00",
+        "lap": 3,
+        "rows": [
+            {
+                "position": 1,
+                "driver_number": 44,
+                "driver_name": "Lewis Hamilton",
+                "interval": None,
+            },
+            {
+                "position": 2,
+                "driver_number": 1,
+                "driver_name": "Max Verstappen",
+                "interval": 0.4,
+            },
+        ],
+    }
+    assert second == {
+        "at": "2026-03-29T06:12:04+00:00",
+        "lap": 3,
+        "rows": [
+            {
+                "position": 1,
+                "driver_number": 44,
+                "driver_name": "Lewis Hamilton",
+                "interval": None,
+            },
+            {
+                "position": 2,
+                "driver_number": 1,
+                "driver_name": "Max Verstappen",
+                "interval": 1.5,
+            },
+        ],
+    }
+
+
+def test_events_yields_the_snapshot_then_later_publishes() -> None:
+    """A connected client gets the current tower, then each later update."""
+    grid = _grid()
+    asyncio.run(_read_snapshot_then_later_publish(grid, _subscriber(grid)))
