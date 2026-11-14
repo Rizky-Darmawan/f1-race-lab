@@ -14,10 +14,4 @@ if __name__ == "__main__":
     payload = HistoricalPayload(interval, lap, position)
     mqtt = MqttClient()
     simulator = LiveSimulation(payload, mqtt)
-    mqtt.connect()
-    try:
-        simulator.run_clock(START, SPEED)
-    except KeyboardInterrupt:
-        pass
-    finally:
-        mqtt.disconnect()
+    simulator.run(START, SPEED)

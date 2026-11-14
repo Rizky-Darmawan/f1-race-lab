@@ -25,6 +25,7 @@ class LiveSimulation:
 
     def __init__(self, payload: HistoricalPayload, mqtt: MqttClient) -> None:
         self._payload = payload
+        self._mqtt = mqtt
         self._interval_publisher = IntervalPublisher(payload.intervals, mqtt)
         self._lap_publisher = LapPublisher(payload.laps, mqtt)
         self._position_publisher = PositionPublisher(payload.positions, mqtt)
@@ -53,6 +54,21 @@ class LiveSimulation:
         self._interval_publisher.publish(iso_date)
         self._lap_publisher.publish(iso_date)
         self._position_publisher.publish(iso_date)
+
+    def _session(self, start: datetime, speed: float) -> None:
+        """Connect, replay, and disconnect."""
+        self._mqtt.connect()
+        try:
+            self.run_clock(start, speed)
+        finally:
+            self._mqtt.disconnect()
+
+    def run(self, start: datetime, speed: float = 1) -> None:
+        """Replay messages after `start` until interrupted."""
+        try:
+            self._session(start, speed)
+        except KeyboardInterrupt:
+            return
 
     def run_clock(self, start: datetime, speed: float = 1) -> None:
         """Replay messages after `start` at `speed` times race time.
