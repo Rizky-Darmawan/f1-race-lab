@@ -59,22 +59,24 @@ class Subscriber:
     def _format_live_grid(self, live_grid: dict[int, LiveGrid], at: str) -> str:
         """Turn the raw grid into a timing tower in current race order.
 
-        The lap is the one held by the driver in position 1. Every other row
-        shows its gap to the car ahead. `at` is the message timestamp.
+        The lap is the one held by the driver in position 1. That driver's
+        interval is null; every other row shows its gap to the car ahead.
+        `at` is the message timestamp.
         """
         ordered = sorted(live_grid.values(), key=lambda row: (row.position, row.driver_number))
         if not ordered:
-            return at
+            return json.dumps({"at": at, "lap": None, "rows": []})
         leader = next((row for row in ordered if row.position == 1), ordered[0])
-        name_width = max(len(row.driver_name) for row in ordered)
-        lines = [f"{at}  LAP {leader.lap}"]
-        for row in ordered:
-            name = f"{row.driver_name:<{name_width}}"
-            if row is leader:
-                lines.append(f"{row.position:>2}  {name}".rstrip())
-            else:
-                lines.append(f"{row.position:>2}  {name}  {row.interval:+.3f}")
-        return "\n".join(lines)
+        rows = [
+            {
+                "position": row.position,
+                "driver_number": row.driver_number,
+                "driver_name": row.driver_name,
+                "interval": None if row is leader else row.interval,
+            }
+            for row in ordered
+        ]
+        return json.dumps({"at": at, "lap": leader.lap, "rows": rows})
 
     async def _listen(self) -> None:
         client = MQTTClient(_CLIENT_ID)

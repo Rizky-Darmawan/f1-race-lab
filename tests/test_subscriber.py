@@ -147,6 +147,21 @@ def test_format_live_grid_shows_the_leaders_lap_and_gaps_behind() -> None:
     grid[1].lap = 9
     grid[1].interval = 0.8
     text = _subscriber(grid)._format_live_grid(grid, "2026-03-29T05:14:04+00:00")
-    assert text == (
-        "2026-03-29T05:14:04+00:00  LAP 3\n 1  Lewis Hamilton\n 2  Max Verstappen  +0.800"
-    )
+    assert json.loads(text) == {
+        "at": "2026-03-29T05:14:04+00:00",
+        "lap": 3,
+        "rows": [
+            {
+                "position": 1,
+                "driver_number": 44,
+                "driver_name": "Lewis Hamilton",
+                "interval": None,
+            },
+            {
+                "position": 2,
+                "driver_number": 1,
+                "driver_name": "Max Verstappen",
+                "interval": 0.8,
+            },
+        ],
+    }
