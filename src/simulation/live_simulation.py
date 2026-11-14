@@ -23,10 +23,8 @@ class HistoricalPayload:
 class LiveSimulation:
     """Publish race messages when their original timestamp comes due."""
 
-    def __init__(self, payload: HistoricalPayload) -> None:
-        mqtt = MqttClient()
+    def __init__(self, payload: HistoricalPayload, mqtt: MqttClient) -> None:
         self._payload = payload
-        self._mqtt = mqtt
         self._interval_publisher = IntervalPublisher(payload.intervals, mqtt)
         self._lap_publisher = LapPublisher(payload.laps, mqtt)
         self._position_publisher = PositionPublisher(payload.positions, mqtt)
@@ -67,16 +65,10 @@ class LiveSimulation:
         origin = start if start.tzinfo is not None else start.replace(tzinfo=UTC)
         schedule = self._schedule(origin)
         wall_origin = time.perf_counter()
-        self._mqtt.connect()
         print(f"Publisher started at {speed:g}x..")
-        try:
-            for when, stamp in schedule:
-                race_elapsed = (when - origin).total_seconds() / speed
-                remaining = race_elapsed - (time.perf_counter() - wall_origin)
-                if remaining > 0:
-                    time.sleep(remaining)
-                self._publish_all(stamp)
-        except KeyboardInterrupt:
-            return
-        finally:
-            self._mqtt.disconnect()
+        for when, stamp in schedule:
+            race_elapsed = (when - origin).total_seconds() / speed
+            remaining = race_elapsed - (time.perf_counter() - wall_origin)
+            if remaining > 0:
+                time.sleep(remaining)
+            self._publish_all(stamp)
