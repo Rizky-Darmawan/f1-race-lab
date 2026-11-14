@@ -347,4 +347,3 @@ def test_run_clock_empty_schedule_does_not_connect(monkeypatch: pytest.MonkeyPat
     _assert_session_untouched(mqtt)
     assert mqtt.published == []
     assert clock.sleeps == []
-
